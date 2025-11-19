@@ -23,7 +23,7 @@ module.exports = {
       webpackConfig.plugins.push(
         new webpack.ProvidePlugin({
           Buffer: ["buffer", "Buffer"],
-          process: "process/browser",
+          process: "browser-process/browser",
         })
       );
 

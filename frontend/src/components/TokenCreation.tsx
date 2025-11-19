@@ -60,9 +60,6 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
       // ----------------------------
       const mintKeypair = Keypair.generate();
       const mint = mintKeypair.publicKey;
-
-      const transferFeeAuthority = Keypair.generate();
-      const withdrawWithheldAuthority = Keypair.generate();
       const decimals = tokenDecimals;
       const feeBasisPoints = 50;
       const maxFee = BigInt(5_000);
@@ -110,13 +107,25 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
         })
       );
 
+      // Get latest blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+
       // ----------------------------
-      // 4️⃣ Send transaction
+      // 4️⃣ Send transaction and WAIT for confirmation
       // ----------------------------
+      display("Creating mint...", "info");
       const signature = await sendTransaction(tx, connection, { 
         signers: [mintKeypair] 
       });
       
+      // 🔥 CRITICAL: Wait for confirmation before proceeding
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight
+      }, 'confirmed');
     
       display(`Mint created: ${mint.toBase58()}`, "success");
 
@@ -153,9 +162,22 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
         )
       );
 
-      // No additional signers needed! ATA is deterministic
+      // Get fresh blockhash for the second transaction
+      const { blockhash: mintBlockhash, lastValidBlockHeight: mintLastValidBlockHeight } = 
+        await connection.getLatestBlockhash('confirmed');
+      mintTx.recentBlockhash = mintBlockhash;
+      mintTx.feePayer = publicKey;
+
+      // Send minting transaction
+      display("Minting tokens...", "info");
       const mintSignature = await sendTransaction(mintTx, connection);
       
+      // Wait for confirmation
+      await connection.confirmTransaction({
+        signature: mintSignature,
+        blockhash: mintBlockhash,
+        lastValidBlockHeight: mintLastValidBlockHeight
+      }, 'confirmed');
 
       display(`Minted ${tokenSupply} tokens to ${associatedTokenAccount.toBase58()}`, "success");
 
@@ -170,11 +192,11 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
       });
 
     } catch (e: any) {
-      console.error(e);
+      console.error("Token creation error:", e);
       display(e.message || String(e), "error");
+    } finally {
+      setIsCreating(false);
     }
-
-    setIsCreating(false);
   };
 
   return (

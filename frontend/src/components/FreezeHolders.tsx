@@ -10,6 +10,7 @@ interface FreezeHoldersProps {
 }
 
 const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage }) => {
+  console.log(config.mintAddress)
   const { publicKey } = useWallet();
   const { connection } = useConnection();
   const [freezeStatus, setFreezeStatus] = useState<string>('');
@@ -187,7 +188,7 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
       return;
     }
 
-    if (!config.mintAddress || config.mintAddress === "4ymjEVRokyipGDxwgkNez3cvMqwnkL5n3jM7zThsmC41") {
+    if (!config.mintAddress || config.mintAddress === "") {
       displayMessage('Please create a token or set a valid mint address in the configuration.', 'error');
       return;
     }

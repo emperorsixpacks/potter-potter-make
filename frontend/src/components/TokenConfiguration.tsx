@@ -9,14 +9,14 @@ interface TokenConfigurationProps {
 }
 
 const TokenConfiguration: React.FC<TokenConfigurationProps> = ({ config, updateConfig, saveConfig, displayMessage }) => {
-  const [freezeThreshold, setFreezeThreshold] = useState<string>(config.freezeThreshold.toString());
-  const [freezeDelay, setFreezeDelay] = useState<string>(config.freezeDelay.toString());
-  const [priorityRate, setPriorityRate] = useState<string>(config.priorityRate.toString());
+  const [freezeThreshold, setFreezeThreshold] = useState<string>("0");
+  const [freezeDelay, setFreezeDelay] = useState<string>("0");
+  const [priorityRate, setPriorityRate] = useState<string>("25000");
 
   useEffect(() => {
-    setFreezeThreshold(config.freezeThreshold.toString());
-    setFreezeDelay(config.freezeDelay.toString());
-    setPriorityRate(config.priorityRate.toString());
+    setFreezeThreshold("0");
+    setFreezeDelay("0");
+    setPriorityRate("25000");
   }, [config]);
 
   const handleSaveConfig = () => {

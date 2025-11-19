@@ -46,7 +46,7 @@ function App() {
   const [config, setConfig] = useState<AppConfig>({
     privateKey: "2kUN9hN3g9wPVS31Jn9Ab7jcudDh7CuGVukCLoSYhZeZGAu3QEBkJPaHY7wv18wibGUAurJ5q33MBC685Xx96PBd",
     rpcEndpoint: "https://devnet.helius-rpc.com/?api-key=2672dff0-a5c3-46c6-9426-863d32acd620",
-    mintAddress: "4ymjEVRokyipGDxwgkNez3cvMqwnkL5n3jM7zThsmC41",
+    mintAddress: "",
     freezeThreshold: 0,
     freezeDelay: 0,
     timeout: 180,
@@ -84,7 +84,7 @@ function App() {
   };
 
   return (
-    <ConnectionProvider endpoint={config.rpcEndpoint}>
+    <ConnectionProvider endpoint={network}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <div className="App">
