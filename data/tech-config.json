@@ -1,0 +1,8 @@
+{
+    "tick" : 500,
+    "requestTick": 2000,
+    "chunkSize" : 25,
+    "showControls" : true,
+    "showDetailedErrors" : false
+}
+                            

@@ -1,0 +1,12 @@
+{
+    "privateKey": "2kUN9hN3g9wPVS31Jn9Ab7jcudDh7CuGVukCLoSYhZeZGAu3QEBkJPaHY7wv18wibGUAurJ5q33MBC685Xx96PBd",
+    "rpcEndpoint": "https://devnet.helius-rpc.com/?api-key=2672dff0-a5c3-46c6-9426-863d32acd620",
+    "mintAddress": "4ymjEVRokyipGDxwgkNez3cvMqwnkL5n3jM7zThsmC41",
+    "freezeThreshold": 0,
+    "freezeDelay": 0,
+    "timeout": 180,
+    "priorityRate": 25000,
+    "whitelist": [
+    ]
+}
+                            

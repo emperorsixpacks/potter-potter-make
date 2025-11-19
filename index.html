@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Token Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
+    <script src="https://unpkg.com/@solana/spl-token@latest/lib/index.iife.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Solana Token Manager</h1>
+
+        <section id="wallet-connection">
+            <h2>Wallet Connection</h2>
+            <select id="wallet-selector">
+                <option value="">Select Wallet</option>
+                <option value="phantom">Phantom</option>
+                <option value="solflare">Solflare</option>
+                <option value="backpack">Backpack</option>
+            </select>
+            <button id="connect-wallet">Connect Wallet</button>
+            <p>Connected: <span id="connected-address">None</span></p>
+        </section>
+
+        <section id="token-creation">
+            <h2>Create New Token</h2>
+            <input type="text" id="token-name" placeholder="Token Name (e.g., MyToken)">
+            <input type="text" id="token-symbol" placeholder="Token Symbol (e.g., MTK)">
+            <input type="number" id="token-decimals" placeholder="Decimals (e.g., 9)" value="9">
+            <input type="number" id="token-supply" placeholder="Initial Supply (e.g., 1000000)" value="1000000">
+            <button id="create-token">Create Token</button>
+            <p>New Mint Address: <span id="new-mint-address"></span></p>
+        </section>
+
+        <section id="current-token-config">
+            <h2>Current Token Configuration</h2>
+            <label for="config-mint-address">Mint Address:</label>
+            <input type="text" id="config-mint-address" readonly>
+            <label for="config-freeze-threshold">Freeze Threshold:</label>
+            <input type="number" id="config-freeze-threshold">
+            <label for="config-freeze-delay">Freeze Delay (seconds):</label>
+            <input type="number" id="config-freeze-delay">
+            <label for="config-priority-rate">Priority Rate (micro-lamports):</label>
+            <input type="number" id="config-priority-rate">
+            <button id="save-config">Save Configuration</button>
+        </section>
+
+        <section id="whitelist-management">
+            <h2>Whitelist Management</h2>
+            <ul id="whitelist-display"></ul>
+            <input type="text" id="new-whitelist-address" placeholder="Address to add to whitelist">
+            <button id="add-to-whitelist">Add to Whitelist</button>
+        </section>
+
+        <section id="freeze-functionality">
+            <h2>Freeze Holders</h2>
+            <button id="start-freeze">Start Freeze Script</button>
+            <p id="freeze-status"></p>
+        </section>
+
+        <div id="messages"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
