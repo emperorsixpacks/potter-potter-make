@@ -98,6 +98,7 @@ function App() {
               <TokenCreation 
                 config={config}
                 updateConfig={updateConfig}
+                saveConfig={saveConfig}
                 displayMessage={displayMessage}
               />
 
