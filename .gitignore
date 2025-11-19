@@ -6,6 +6,10 @@ frontend/node_modules/
 /.pnp
 .pnp.js
 
+freeze.js
+data/
+index.html
+
 # testing
 /coverage
 
