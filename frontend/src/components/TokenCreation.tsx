@@ -56,9 +56,6 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
     setIsCreating(true);
 
     try {
-      // ----------------------------
-      // 1️⃣ Generate mint keypair
-      // ----------------------------
       const mintKeypair = Keypair.generate();
       const mint = mintKeypair.publicKey;
       const decimals = tokenDecimals;
@@ -67,9 +64,6 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
 
       display("Calculating space and rent...", "info");
 
-      // ----------------------------
-      // 2️⃣ Calculate space and rent
-      // ----------------------------
       const metadata: TokenMetadata = {
         mint,
         name: tokenName,
@@ -82,12 +76,8 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
       const metadataLen = TYPE_SIZE + LENGTH_SIZE + pack(metadata).length;
       const mintLamports = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
 
-      // Get blockhash BEFORE building transaction
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
 
-      // ----------------------------
-      // 3️⃣ Build mint creation transaction
-      // ----------------------------
       const tx = new Transaction({
         recentBlockhash: blockhash,
         feePayer: publicKey
@@ -101,7 +91,6 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
           lamports: mintLamports,
           programId: TOKEN_2022_PROGRAM_ID,
         }),
-
         createInitializeTransferFeeConfigInstruction(
           mint,
           publicKey,
@@ -110,10 +99,8 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
           maxFee,
           TOKEN_2022_PROGRAM_ID
         ),
-
         createInitializeMetadataPointerInstruction(mint, publicKey, mint, TOKEN_2022_PROGRAM_ID),
         createInitializeMintInstruction(mint, decimals, publicKey, publicKey, TOKEN_2022_PROGRAM_ID),
-
         createInitializeInstruction({
           programId: TOKEN_2022_PROGRAM_ID,
           mint,
@@ -126,12 +113,8 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
         })
       );
 
-      // PartialSign with mint keypair
       tx.partialSign(mintKeypair);
 
-      // ----------------------------
-      // 4️⃣ Send mint creation transaction
-      // ----------------------------
       display("Creating mint...", "info");
       const signature = await sendTransaction(tx, connection);
 
@@ -144,9 +127,6 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
 
       display(`✅ Mint created: ${mint.toBase58()}`, "success");
 
-      // ----------------------------
-      // 5️⃣ Create ATA and mint tokens
-      // ----------------------------
       const associatedTokenAccount = getAssociatedTokenAddressSync(
         mint,
         publicKey,
@@ -155,7 +135,6 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
 
-      // Get fresh blockhash for second transaction
       const { blockhash: mintBlockhash, lastValidBlockHeight: mintLastValidBlockHeight } = 
         await connection.getLatestBlockhash('finalized');
 
@@ -166,18 +145,17 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
 
       mintTx.add(
         createAssociatedTokenAccountInstruction(
-          publicKey, // payer
+          publicKey,
           associatedTokenAccount,
-          publicKey, // owner
+          publicKey,
           mint,
           TOKEN_2022_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         ),
-
         createMintToInstruction(
           mint,
           associatedTokenAccount,
-          publicKey, // mint authority
+          publicKey,
           BigInt(tokenSupply) * BigInt(10 ** tokenDecimals),
           [],
           TOKEN_2022_PROGRAM_ID
@@ -196,20 +174,12 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
 
       display(`✅ Minted ${tokenSupply} ${tokenSymbol} to your wallet`, "success");
 
-      // ----------------------------
-      // 6️⃣ Update state
-      // ----------------------------
       setNewMintAddress(mint.toBase58());
-      updateConfig({ 
-        ...config, 
-        mintAddress: mint.toBase58(),
-        // tokenAccountAddress: associatedTokenAccount.toBase58()
-      });
+      updateConfig({ mintAddress: mint.toBase58() });
 
     } catch (e: any) {
       console.error("Token creation error:", e);
       
-      // Detailed error logging
       if (e.logs) {
         console.error("Transaction logs:", e.logs);
         display(`Error: ${e.logs.join('\n')}`, "error");
@@ -222,22 +192,22 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
   };
 
   return (
-    <section style={{ padding: "20px" }}>
-      <h2>Create Token-2022</h2>
+    <section className="bg-gray-800 p-6 rounded-lg shadow-lg">
+      <h2 className="text-2xl font-bold mb-4">Create Token-2022</h2>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxWidth: "400px" }}>
+      <div className="flex flex-col gap-4 max-w-md">
         <input 
           value={tokenName} 
           placeholder="Token Name (e.g., My Token)" 
           onChange={(e) => setTokenName(e.target.value)} 
-          style={{ padding: "8px" }}
+          className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         
         <input 
           value={tokenSymbol} 
           placeholder="Symbol (e.g., MTK)" 
           onChange={(e) => setTokenSymbol(e.target.value)} 
-          style={{ padding: "8px" }}
+          className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         
         <input 
@@ -245,7 +215,7 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
           value={tokenDecimals} 
           onChange={(e) => setTokenDecimals(Number(e.target.value))} 
           placeholder="Decimals (default: 9)"
-          style={{ padding: "8px" }}
+          className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         
         <input 
@@ -253,29 +223,22 @@ const TokenCreation: React.FC<TokenCreationProps> = ({ config, updateConfig, dis
           value={tokenSupply} 
           onChange={(e) => setTokenSupply(Number(e.target.value))} 
           placeholder="Initial Supply"
-          style={{ padding: "8px" }}
+          className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         <button 
           onClick={createToken} 
           disabled={isCreating || !connected}
-          style={{ 
-            padding: "12px", 
-            backgroundColor: isCreating || !connected ? "#ccc" : "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: isCreating || !connected ? "not-allowed" : "pointer"
-          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           {isCreating ? "Creating…" : "Create Token"}
         </button>
       </div>
 
       {newMintAddress && (
-        <div style={{ marginTop: "20px", padding: "10px", backgroundColor: "#f0f0f0", borderRadius: "4px" }}>
-          <strong>Mint Address:</strong> 
-          <p style={{ wordBreak: "break-all", fontSize: "12px" }}>{newMintAddress}</p>
+        <div className="mt-6 p-4 bg-gray-700 rounded-lg">
+          <strong className="text-white">Mint Address:</strong> 
+          <p className="text-sm text-gray-300 break-all mt-1">{newMintAddress}</p>
         </div>
       )}
     </section>
