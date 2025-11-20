@@ -3,13 +3,8 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import * as splToken from "@solana/spl-token";
 import {
   PublicKey,
-  TransactionInstruction,
-  Transaction,
-  ComputeBudgetProgram,
-  sendAndConfirmTransaction,
-  Keypair,
 } from "@solana/web3.js";
-import { AppConfig } from "../App";
+import { AppConfig } from "../../pages/index";
 
 interface FreezeHoldersProps {
   config: AppConfig;
@@ -147,125 +142,203 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({
     mintAddressPublicKey: PublicKey,
     decimals: number
   ): Promise<void> => {
-    if (!publicKey) return;
 
-    const {
-      tokenAccounts,
-      quoteTokenVault: vault,
-      poolType: pool,
-    } = await getHoldersData(currentConfig, mintAddressPublicKey, decimals);
-    quoteTokenVault = vault;
-    poolType = pool;
 
-    console.log(`Accounts to freeze: ${tokenAccounts}`);
+        const {
 
-    if (!Array.isArray(tokenAccounts)) {
-      displayMessage("Error: getHoldersData did not return an array!", "error");
-      return;
-    }
 
-    const CHUNK_SIZE = techConfig.chunkSize;
-    const PRIORITY_RATE = currentConfig.priorityRate;
-    const secret = Uint8Array.from([
-      106, 2, 121, 26, 90, 125, 177, 42, 220, 2, 220, 65, 177, 105, 141, 28, 87,
-      169, 221, 59, 69, 104, 217, 32, 18, 6, 202, 6, 3, 98, 121, 85, 166, 54,
-      182, 192, 112, 236, 79, 59, 37, 3, 165, 46, 188, 186, 8, 141, 166, 70, 67,
-      239, 179, 162, 25, 232, 214, 4, 156, 100, 126, 171, 144, 42,
-    ]);
+          tokenAccounts,
 
-    const keypair = Keypair.fromSecretKey(secret);
 
-    if (tokenAccounts.length > 0) {
-      displayMessage(
-        `Found ${tokenAccounts.length} accounts to freeze.`,
-        "info"
-      );
-      for (let i = 0; i < tokenAccounts.length; i += CHUNK_SIZE) {
-        const chunk = tokenAccounts.slice(i, i + CHUNK_SIZE);
-        let transactions = new Transaction();
+          quoteTokenVault: vault,
 
-        for (let j = 0; j < chunk.length; j++) {
-          let tokenAccountPublicKey = new PublicKey(chunk[j]);
-          const instruction = new TransactionInstruction({
-            keys: [
-              {
-                pubkey: tokenAccountPublicKey,
-                isSigner: false,
-                isWritable: true,
-              },
-              {
-                pubkey: mintAddressPublicKey,
-                isSigner: false,
-                isWritable: false,
-              },
-              { pubkey: keypair.publicKey, isSigner: true, isWritable: false },
-            ],
-            programId: splToken.TOKEN_2022_PROGRAM_ID,
-            data: Buffer.from(new Uint8Array([10])),
-          });
-          transactions.add(instruction);
+
+          poolType: pool,
+
+
+        } = await getHoldersData(currentConfig, mintAddressPublicKey, decimals);
+
+
+        quoteTokenVault = vault;
+
+
+        poolType = pool;
+
+
+    
+
+
+        console.log(`Accounts to freeze: ${tokenAccounts}`);
+
+
+    
+
+
+        if (!Array.isArray(tokenAccounts)) {
+
+
+          displayMessage("Error: getHoldersData did not return an array!", "error");
+
+
+          return;
+
+
         }
 
-        if (PRIORITY_RATE > 0) {
-          const priorityFeeInstruction =
-            ComputeBudgetProgram.setComputeUnitPrice({
-              microLamports: PRIORITY_RATE,
-            });
-          transactions.add(priorityFeeInstruction);
-        }
 
-        try {
-          transactions.feePayer = keypair.publicKey;
-          transactions.recentBlockhash = (
-            await connection.getLatestBlockhash()
-          ).blockhash;
+    
+
+
+        if (tokenAccounts.length > 0) {
+
 
           displayMessage(
-            `✅︎ Prepared freeze transaction for ${chunk.length} accounts.`,
-            "success"
+
+
+            `Found ${tokenAccounts.length} accounts to freeze. Sending to backend for processing.`,
+
+
+            "info"
+
+
           );
-          let signature = await sendAndConfirmTransaction(
-            connection,
-            transactions,
-            [keypair]
-          );
-          console.log("Freeze transaction signature:", signature);
-          displayMessage(
-            `✅︎ Successfully froze ${chunk.length} accounts. Transaction signature: ${signature}`,
-            "success"
-          );
-          await sleep(techConfig.requestTick);
-        } catch (error: any) {
-          displayMessage(
-            `❌ Error occurred when trying to freeze holders: ${error.message}`,
-            "error"
-          );
-          console.error(error);
-          if (listenerId) {
-            connection.removeAccountChangeListener(listenerId);
+
+
+    
+
+
+          const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL;
+
+
+          if (!backendApiUrl) {
+
+
+            displayMessage("❌ Backend API URL not configured. Please set NEXT_PUBLIC_BACKEND_API_URL in your environment.", "error");
+
+
+            return;
+
+
           }
-          throw error;
+
+
+    
+
+
+          try {
+
+
+            const response = await fetch(`${backendApiUrl}/api/freeze-tokens`, {
+
+
+              method: 'POST',
+
+
+              headers: {
+
+
+                'Content-Type': 'application/json',
+
+
+              },
+
+
+              body: JSON.stringify({
+
+
+                tokenAccounts: tokenAccounts,
+
+
+                mintAddress: mintAddressPublicKey.toBase58(),
+
+
+                priorityRate: currentConfig.priorityRate,
+
+
+              }),
+
+
+            });
+
+
+    
+
+
+            const result = await response.json();
+
+
+    
+
+
+            if (response.ok) {
+
+
+              displayMessage(`✅ Successfully initiated freeze for ${tokenAccounts.length} accounts. Transaction signature: ${result.signature}`, "success");
+
+
+            } else {
+
+
+              throw new Error(result.error || "Unknown backend error");
+
+
+            }
+
+
+          } catch (error: any) {
+
+
+            displayMessage(
+
+
+              `❌ Error occurred when trying to freeze holders via backend: ${error.message}`,
+
+
+              "error"
+
+
+            );
+
+
+            console.error(error);
+
+
+            throw error;
+
+
+          }
+
+
+        } else {
+
+
+          displayMessage(
+
+
+            `No accounts to freeze found for mint ${currentConfig.mintAddress}. Keep pending on new transactions.`,
+
+
+            "info"
+
+
+          );
+
+
         }
-      }
-    } else {
-      displayMessage(
-        `No accounts to freeze found for mint ${currentConfig.mintAddress}. Keep pending on new transactions.`,
-        "info"
-      );
-    }
   };
 
   const handleStartFreeze = async () => {
-    if (!publicKey) {
-      displayMessage("Please connect your wallet first.", "error");
-      return;
-    }
-
     if (!config.mintAddress || config.mintAddress === "") {
       displayMessage(
         "Please create a token or set a valid mint address in the configuration.",
         "error"
       );
+      return;
+    }
+
+    const freezeAuthorityPubkey = process.env.NEXT_PUBLIC_FREEZE_AUTHORITY_PUBKEY;
+    if (!freezeAuthorityPubkey) {
+      displayMessage("❌ Backend Freeze Authority Public Key not found in environment variables. Please set NEXT_PUBLIC_FREEZE_AUTHORITY_PUBKEY.", "error");
       return;
     }
 
@@ -299,7 +372,7 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({
       ) {
         const mintInfo = mintData.parsed.info;
 
-        if (mintInfo.freezeAuthority === publicKey.toBase58()) {
+        if (mintInfo.freezeAuthority === freezeAuthorityPubkey) {
           // OK
         } else if (mintInfo.freezeAuthority === null) {
           displayMessage(
@@ -310,7 +383,7 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({
           return;
         } else {
           displayMessage(
-            `❌ Connected wallet doesn't have freeze authority for this token.`,
+            `❌ The configured backend wallet doesn't have freeze authority for this token. Expected: ${freezeAuthorityPubkey}, Found: ${mintInfo.freezeAuthority}.`,
             "error"
           );
           setIsFreezing(false);
@@ -325,8 +398,8 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({
             updatedWhitelist.push(authority);
           }
         });
-        if (!updatedWhitelist.includes(publicKey.toBase58())) {
-          updatedWhitelist.push(publicKey.toBase58());
+        if (!updatedWhitelist.includes(freezeAuthorityPubkey)) {
+          updatedWhitelist.push(freezeAuthorityPubkey);
         }
 
         setFreezeStatus("⏳ Performing an initial freeze loop...");

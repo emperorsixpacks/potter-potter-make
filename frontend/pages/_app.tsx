@@ -9,9 +9,18 @@ import {
 } from '@solana/wallet-adapter-wallets';
 import { useMemo } from 'react';
 import { clusterApiUrl } from '@solana/web3.js';
+import { AppConfig } from "./index";
 
 function MyApp({ Component, pageProps }: AppProps) {
-  const network = clusterApiUrl('devnet');
+  const rpcEndpoint = useMemo(() => {
+    const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT;
+    if (!endpoint) {
+      console.warn("NEXT_PUBLIC_SOLANA_RPC_ENDPOINT is not set. Falling back to devnet.");
+      return clusterApiUrl('devnet');
+    }
+    return endpoint;
+  }, []);
+
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
@@ -21,7 +30,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   );
 
   return (
-    <ConnectionProvider endpoint={network}>
+    <ConnectionProvider endpoint={rpcEndpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <Head>

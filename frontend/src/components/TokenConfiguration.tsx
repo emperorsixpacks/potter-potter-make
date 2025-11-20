@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppConfig } from '../App';
+import { AppConfig } from '../../pages/index';
 
 interface TokenConfigurationProps {
   config: AppConfig;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageType } from '../App';
+import { MessageType } from '../../pages/index';
 
 interface MessageLogProps {
   messages: MessageType[];
