@@ -1,7 +1,35 @@
 // TokenCreationWithMetaplexFixed.tsx
 import React, { useState } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
+import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
+
+import {
+  ExtensionType,
+  createInitializeMintInstruction,
+  createAssociatedTokenAccountInstruction,
+  createMintToInstruction,
+  getAssociatedTokenAddressSync,
+  getMintLen,
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createInitializeMetadataPointerInstruction,
+  createInitializeTransferFeeConfigInstruction,
+} from "@solana/spl-token";
+
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import {
+  createV1,
+  mplTokenMetadata,
+} from "@metaplex-foundation/mpl-token-metadata";
+import { mplToolbox } from "@metaplex-foundation/mpl-toolbox";
+import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters";
+import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
+import { toWeb3JsInstruction } from "@metaplex-foundation/umi-web3js-adapters";
+
+import {
+  percentAmount,
+  publicKey as metaplexPublicKey,
+} from "@metaplex-foundation/umi";
 
 import { AppConfig } from "../../pages/index";
 
@@ -12,13 +40,17 @@ interface TokenCreationProps {
   displayMessage: (message: string, type?: string) => void;
 }
 
+const extensions = [
+  ExtensionType.TransferFeeConfig
+];
+
 const TokenCreation: React.FC<TokenCreationProps> = ({
   config,
   updateConfig,
   displayMessage,
 }) => {
-  const { publicKey, connected } = useWallet();
-  const { connection } = useConnection(); // Although not used directly after refactor, keep for context or future use.
+  const { publicKey, sendTransaction, connected } = useWallet();
+  const { connection } = useConnection();
 
   const [tokenName, setTokenName] = useState<string>("");
   const [tokenSymbol, setTokenSymbol] = useState<string>("");
@@ -27,6 +59,12 @@ const TokenCreation: React.FC<TokenCreationProps> = ({
   const [tokenImage, setTokenImage] = useState<File | null>(null);
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [newMintAddress, setNewMintAddress] = useState<string>("");
+
+  const wallet = useWallet();
+  const umi = createUmi(connection.rpcEndpoint)
+    .use(walletAdapterIdentity(wallet))
+    .use(mplTokenMetadata())
+    .use(mplToolbox());
 
   const display = (msg: string, type: string = "info") => {
     try {
@@ -37,19 +75,15 @@ const TokenCreation: React.FC<TokenCreationProps> = ({
   };
 
   const createToken = async () => {
+    if (!publicKey || !connected)
+      return display("Connect wallet first", "error");
     if (!tokenName.trim() || !tokenSymbol.trim())
       return display("Name + Symbol required", "error");
-
-    const tokenAuthorityPubkey = process.env.NEXT_PUBLIC_FREEZE_AUTHORITY_PUBKEY;
-    if (!tokenAuthorityPubkey) {
-      display("❌ Token Authority Public Key not found in environment variables. Please set NEXT_PUBLIC_FREEZE_AUTHORITY_PUBKEY.", "error");
-      return;
-    }
 
     setIsCreating(true);
 
     try {
-      // --- 1) Upload image & metadata to Pinata (client-side) ---
+      // --- 1) Upload image & metadata to Pinata ---
       let imageUrl = "";
       if (tokenImage) {
         display("Uploading image to IPFS...", "info");
@@ -106,37 +140,184 @@ const TokenCreation: React.FC<TokenCreationProps> = ({
 
       display("✅ Metadata uploaded", "success");
 
-      // --- 2) Call backend API to create token ---
-      display("Calling backend to create token...", "info");
+      // --- 2) Create mint with extensions ---
+      const mintKeypair = Keypair.generate();
+      const mint = mintKeypair.publicKey;
+      const decimals = tokenDecimals;
+      const feeBasisPoints = 50;
+      const maxFee = BigInt(5_000);
+      
+      const mintLen = getMintLen(extensions);
+      const mintLamports = await connection.getMinimumBalanceForRentExemption(
+        mintLen
+      );
 
-      const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || ''; // Use empty string for relative path
-      const createTokenResponse = await fetch(`${backendApiUrl}/api/create-token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tokenName,
-          tokenSymbol,
-          tokenDecimals,
-          tokenSupply,
-          metadataUri,
-          tokenAuthorityPubkey,
-          payerPublicKey: publicKey?.toBase58(), // Pass connected wallet's public key for fee payment if needed, though backend will pay.
-        }),
+      const { blockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash("finalized");
+
+      const tx = new Transaction({
+        recentBlockhash: blockhash,
+        feePayer: publicKey,
       });
 
-      const createTokenResult = await createTokenResponse.json();
+      tx.add(
+        SystemProgram.createAccount({
+          fromPubkey: publicKey,
+          newAccountPubkey: mint,
+          space: mintLen,
+          lamports: mintLamports,
+          programId: TOKEN_2022_PROGRAM_ID,
+        }),
+        createInitializeTransferFeeConfigInstruction(
+          mint,
+          publicKey,
+          publicKey,
+          feeBasisPoints,
+          maxFee,
+          TOKEN_2022_PROGRAM_ID
+        ),
+      
+        createInitializeMintInstruction(
+          mint,
+          decimals,
+          publicKey,
+          publicKey,
+          TOKEN_2022_PROGRAM_ID
+        )
+      );
 
-      if (!createTokenResponse.ok) {
-        throw new Error(createTokenResult.error || "Backend token creation failed");
+      display("Creating mint on-chain...", "info");
+      
+      // FIX: Correct signing order - sign all at once
+      tx.sign(mintKeypair);
+      
+      if (!wallet.signTransaction) {
+        throw new Error("Wallet does not support transaction signing");
       }
+      
+      const signedTx = await wallet.signTransaction(tx);
+      const rawTransaction = signedTx.serialize();
+      const sig = await connection.sendRawTransaction(rawTransaction, {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+      
+      await connection.confirmTransaction(
+        { signature: sig, blockhash, lastValidBlockHeight },
+        "confirmed"
+      );
+      display(`✅ Mint created: ${mint.toBase58()}`, "success");
 
-      display(`✅ Token creation initiated by backend. Mint Address: ${createTokenResult.mintAddress}`, "success");
-      setNewMintAddress(createTokenResult.mintAddress);
-      updateConfig({ mintAddress: createTokenResult.mintAddress });
+      // --- 3) Create Metaplex metadata ---
+      const mint_address = metaplexPublicKey(mint.toBase58());
+      
+      // Get fresh blockhash for metadata transaction
+      const {
+        blockhash: metaBlockhash,
+        lastValidBlockHeight: metaLastValidBlockHeight,
+      } = await connection.getLatestBlockhash("finalized");
+      
+      const metadataTx = new Transaction({
+        recentBlockhash: metaBlockhash,
+        feePayer: publicKey,
+      }).add(
+        ...createV1(umi, {
+          mint: mint_address,
+          authority: umi.identity,
+          payer: umi.identity,
+          updateAuthority: umi.identity,
+          name: metadataJson.name,
+          symbol: metadataJson.symbol,
+          uri: metadataUri,
+          sellerFeeBasisPoints: percentAmount(0.0),
+          tokenStandard: TokenStandard.Fungible,
+        })
+          .getInstructions()
+          .map(toWeb3JsInstruction)
+      );
+
+      display("Creating Metaplex metadata on-chain...", "info");
+
+      // FIX: Correct signing order - sign all at once
+      metadataTx.sign(mintKeypair);
+      
+      if (!wallet.signTransaction) {
+        throw new Error("Wallet does not support transaction signing");
+      }
+      
+      const signedMetaTx = await wallet.signTransaction(metadataTx);
+      const rawMetaTransaction = signedMetaTx.serialize();
+      const msig = await connection.sendRawTransaction(rawMetaTransaction, {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+      
+      await connection.confirmTransaction(
+        { signature: msig, blockhash: metaBlockhash, lastValidBlockHeight: metaLastValidBlockHeight },
+        "confirmed"
+      );
+
+      display(`✅ Metaplex metadata created`, "success");
+
+      // --- 4) Create ATA & mint tokens ---
+      const ata = getAssociatedTokenAddressSync(
+        mint,
+        publicKey,
+        false,
+        TOKEN_2022_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+      const {
+        blockhash: mintBlockhash,
+        lastValidBlockHeight: mintLastValidBlockHeight,
+      } = await connection.getLatestBlockhash("finalized");
+
+      const mintTx = new Transaction({
+        recentBlockhash: mintBlockhash,
+        feePayer: publicKey,
+      });
+      
+      mintTx.add(
+        createAssociatedTokenAccountInstruction(
+          publicKey,
+          ata,
+          publicKey,
+          mint,
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        ),
+        createMintToInstruction(
+          mint,
+          ata,
+          publicKey,
+          BigInt(tokenSupply) * BigInt(10 ** decimals),
+          [],
+          TOKEN_2022_PROGRAM_ID
+        )
+      );
+
+      const mintSig = await sendTransaction(mintTx, connection);
+      await connection.confirmTransaction(
+        {
+          signature: mintSig,
+          blockhash: mintBlockhash,
+          lastValidBlockHeight: mintLastValidBlockHeight,
+        },
+        "confirmed"
+      );
+      display(`✅ Minted ${tokenSupply} tokens to your wallet`, "success");
+
+      setNewMintAddress(mint.toBase58());
+      updateConfig({ mintAddress: mint.toBase58() });
     } catch (err: any) {
       console.error("Token creation error:", err);
+      
+      // Better error logging
+      if (err.logs) {
+        console.error("Transaction logs:", err.logs);
+      }
+      
       display(err.message || String(err), "error");
     } finally {
       setIsCreating(false);
