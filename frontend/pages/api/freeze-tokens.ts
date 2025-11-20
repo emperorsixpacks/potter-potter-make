@@ -13,7 +13,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { tokenAccounts, mintAddress, priorityRate } = req.body;
+  const { tokenAccounts, mintAddress, priorityRate, stopRequest } = req.body;
+
+  if (stopRequest) {
+    console.log("Freeze operation received a stop request.");
+    return res.status(200).json({ success: true, message: "Freeze operation stopped by request." });
+  }
 
   if (!tokenAccounts || !Array.isArray(tokenAccounts) || !mintAddress) {
     return res.status(400).json({ error: 'Missing required parameters: tokenAccounts and mintAddress' });
