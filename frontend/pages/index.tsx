@@ -1,20 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import './App.css';
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from '@solana/wallet-adapter-wallets';
-import { clusterApiUrl } from '@solana/web3.js';
-import WalletConnection from './components/WalletConnection';
-import TokenCreation from './components/TokenCreation';
-import TokenConfiguration from './components/TokenConfiguration';
-import WhitelistManagement from './components/WhitelistManagement';
-import FreezeHolders from './components/FreezeHolders';
-import MessageLog from './components/MessageLog';
-import Sidebar from './components/Sidebar';
-import '@solana/wallet-adapter-react-ui/styles.css';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import WalletConnection from '../src/components/WalletConnection';
+import TokenCreation from '../src/components/TokenCreation';
+import TokenConfiguration from '../src/components/TokenConfiguration';
+import WhitelistManagement from '../src/components/WhitelistManagement';
+import FreezeHolders from '../src/components/FreezeHolders';
+import MessageLog from '../src/components/MessageLog';
+import Sidebar from '../src/components/Sidebar';
+import Login from '../src/components/Login';
 
 
 export interface AppConfig {
@@ -35,18 +27,12 @@ export interface MessageType {
 }
 
 function App() {
-  const network = clusterApiUrl('devnet');
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-    ],
-    []
-  );
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const [config, setConfig] = useState<AppConfig>({
     privateKey: "2kUN9hN3g9wPVS31Jn9Ab7jcudDh7CuGVukCLoSYhZeZGAu3QEBkJPaHY7wv18wibGUAurJ5q33MBC685Xx96PBd",
-    rpcEndpoint: "https://devnet.helius-rpc.com/?api-key=2672dff0-a5c3-46c6-9426-863d32acd620",
+    rpcEndpoint: `https://devnet.helius-rpc.com/?api-key={process.env.NEXT_PUBLIC_HELIUS_API_KEY!}`,
     mintAddress: "",
     freezeThreshold: 0,
     freezeDelay: 0,
@@ -97,6 +83,15 @@ function App() {
     setSidebarOpen(false);
   };
 
+  const handleLogin = (username: string, password: string) => {
+    if (username === process.env.NEXT_PUBLIC_USERNAME && password === process.env.NEXT_PUBLIC_PASSWORD) {
+      setIsAuthenticated(true);
+      setLoginError(null);
+    } else {
+      setLoginError("Invalid username or password.");
+    }
+  };
+
   const renderContent = () => {
     switch (activeView) {
       case 'creation':
@@ -136,10 +131,11 @@ function App() {
     }
   }
 
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} error={loginError} />;
+  }
+
   return (
-    <ConnectionProvider endpoint={config.rpcEndpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
           <div className="relative min-h-screen md:flex bg-gray-900 text-white">
             {sidebarOpen && (
               <div
@@ -186,9 +182,6 @@ function App() {
               <MessageLog messages={messages} messagesEndRef={messagesEndRef} />
             </div>
           </div>
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
   );
 }
 
