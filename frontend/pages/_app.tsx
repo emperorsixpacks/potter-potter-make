@@ -13,7 +13,7 @@ import { AppConfig } from "./index";
 
 function MyApp({ Component, pageProps }: AppProps) {
   const rpcEndpoint = useMemo(() => {
-    const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT;
+    const endpoint =  `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY!}`;
     if (!endpoint) {
       console.warn("NEXT_PUBLIC_SOLANA_RPC_ENDPOINT is not set. Falling back to devnet.");
       return clusterApiUrl('devnet');
