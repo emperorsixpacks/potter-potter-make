@@ -31,7 +31,7 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const [config, setConfig] = useState<AppConfig>({
-    privateKey: "2kUN9hN3g9wPVS31Jn9Ab7jcudDh7CuGVukCLoSYhZeZGAu3QEBkJPaHY7wv18wibGUAurJ5q33MBC685Xx96PBd",
+    privateKey: "",
     rpcEndpoint: process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT || `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY!}`,
     mintAddress: "",
     freezeThreshold: 0,
@@ -174,7 +174,9 @@ function App() {
                   </button>
                   <h1 className="text-xl font-bold">🍯 Solana Token Manager</h1>
                 </div>
-                <WalletConnection />
+                <div className="flex-none"> {/* Use flex-none to prevent it from shrinking unintentionally */}
+                  <WalletConnection />
+                </div>
               </header>
               <main className="flex-1 p-6 overflow-y-auto">
                 {renderContent()}
