@@ -32,7 +32,7 @@ const FreezeHolders: React.FC<FreezeHoldersProps> = ({
     chunkSize: 25,
   };
 
-  const getRaydiumAuthorities = (cluster: "mainnet-beta" | "devnet") => {
+  const getRaydiumAuthorities = (cluster:string) => {
     if (cluster === "mainnet-beta") {
       return [
         "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
