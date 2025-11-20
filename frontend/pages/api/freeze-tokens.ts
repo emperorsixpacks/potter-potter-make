@@ -22,10 +22,17 @@ function validateEnvVariables() {
 
   let secret: Uint8Array;
   try {
-    secret = Uint8Array.from(privateKeyString.split(',').map(s => parseInt(s.trim(), 10)));
+    // Check if the private key string is a hex string
+    if (privateKeyString.match(/^[0-9a-fA-F]+$/) && privateKeyString.length % 2 === 0) {
+      // Convert hex string to Uint8Array
+      secret = new Uint8Array(privateKeyString.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    } else {
+      // Assume it's a comma-separated string of numbers
+      secret = Uint8Array.from(privateKeyString.split(',').map(s => parseInt(s.trim(), 10)));
+    }
   } catch (parseError) {
     console.error('Error parsing private key:', parseError);
-    throw new Error('Invalid PRIVATE_KEY format in environment variables.');
+    throw new Error('Invalid PRIVATE_KEY format in environment variables. Must be a comma-separated array of numbers or a single hexadecimal string.');
   }
   return { secret, network };
 }
