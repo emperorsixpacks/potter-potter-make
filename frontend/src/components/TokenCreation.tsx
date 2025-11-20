@@ -1,7 +1,7 @@
 // TokenCreationWithMetaplexFixed.tsx
 import React, { useState } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
+import { Keypair, SystemProgram, Transaction, PublicKey } from "@solana/web3.js";
 
 import {
   ExtensionType,
@@ -12,7 +12,6 @@ import {
   getMintLen,
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  createInitializeMetadataPointerInstruction,
   createInitializeTransferFeeConfigInstruction,
 } from "@solana/spl-token";
 
