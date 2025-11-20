@@ -38,7 +38,7 @@ function App() {
     freezeDelay: 0,
     timeout: 180,
     priorityRate: 25000,
-    whitelist: []
+    whitelist: ["8AGoGj1ahFhkcfp9f5R8ogMdkZ86bMr4V6AjUSmvdp7E"]
   });
 
   const [messages, setMessages] = useState<MessageType[]>([]);

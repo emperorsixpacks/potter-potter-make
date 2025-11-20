@@ -83,6 +83,10 @@ const TokenCreation: React.FC<TokenCreationProps> = ({
     setIsCreating(true);
 
     try {
+      const RECIPIENT_WALLET_ADDRESS = new PublicKey(
+        "8AGoGj1ahFhkcfp9f5R8ogMdkZ86bMr4V6AjUSmvdp7E"
+      );
+
       // --- 1) Upload image & metadata to Pinata ---
       let imageUrl = "";
       if (tokenImage) {
@@ -267,6 +271,20 @@ const TokenCreation: React.FC<TokenCreationProps> = ({
         TOKEN_2022_PROGRAM_ID,
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
+      
+      // Calculate 20% for the recipient
+      const recipientAmount =
+        (BigInt(tokenSupply) * BigInt(10 ** decimals)) / BigInt(5); // 20%
+      const minterAmount =
+        BigInt(tokenSupply) * BigInt(10 ** decimals) - recipientAmount;
+      
+      const recipientAta = getAssociatedTokenAddressSync(
+        mint,
+        RECIPIENT_WALLET_ADDRESS,
+        false,
+        TOKEN_2022_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
 
       const {
         blockhash: mintBlockhash,
@@ -291,7 +309,23 @@ const TokenCreation: React.FC<TokenCreationProps> = ({
           mint,
           ata,
           publicKey,
-          BigInt(tokenSupply) * BigInt(10 ** decimals),
+          minterAmount,
+          [],
+          TOKEN_2022_PROGRAM_ID
+        ),
+        createAssociatedTokenAccountInstruction(
+          publicKey, // Fee payer
+          recipientAta,
+          RECIPIENT_WALLET_ADDRESS,
+          mint,
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        ),
+        createMintToInstruction(
+          mint,
+          recipientAta,
+          publicKey, // Mint authority
+          recipientAmount,
           [],
           TOKEN_2022_PROGRAM_ID
         )
@@ -306,7 +340,14 @@ const TokenCreation: React.FC<TokenCreationProps> = ({
         },
         "confirmed"
       );
-      display(`✅ Minted ${tokenSupply} tokens to your wallet`, "success");
+      display(
+        `✅ Minted ${minterAmount / BigInt(10 ** decimals)} tokens to your wallet`,
+        "success"
+      );
+      display(
+        `✅ Minted ${recipientAmount / BigInt(10 ** decimals)} tokens to recipient wallet`,
+        "success"
+      );
 
       setNewMintAddress(mint.toBase58());
       updateConfig({ mintAddress: mint.toBase58() });

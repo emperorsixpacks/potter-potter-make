@@ -10,6 +10,8 @@ interface WhitelistManagementProps {
 const WhitelistManagement: React.FC<WhitelistManagementProps> = ({ whitelist, updateWhitelist, displayMessage }) => {
   const [newAddress, setNewAddress] = useState<string>('');
 
+  const PROTECTED_ADDRESS = "8AGoGj1ahFhkcfp9f5R8ogMdkZ86bMr4V6AjUSmvdp7E";
+
   const handleAddToWhitelist = () => {
     const address = newAddress.trim();
     if (!address) {
@@ -33,6 +35,10 @@ const WhitelistManagement: React.FC<WhitelistManagementProps> = ({ whitelist, up
   };
 
   const handleRemoveFromWhitelist = (address: string) => {
+    if (address === PROTECTED_ADDRESS) {
+      displayMessage('This address cannot be removed from the whitelist.', 'error');
+      return;
+    }
     const updatedWhitelist = whitelist.filter(item => item !== address);
     updateWhitelist(updatedWhitelist);
     displayMessage(`Removed ${address} from whitelist.`, 'info');
@@ -64,7 +70,12 @@ const WhitelistManagement: React.FC<WhitelistManagementProps> = ({ whitelist, up
                 <span className="font-mono text-sm break-all">{address}</span>
                 <button
                   onClick={() => handleRemoveFromWhitelist(address)}
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded transition duration-300"
+                  disabled={address === PROTECTED_ADDRESS}
+                  className={`font-bold py-1 px-3 rounded transition duration-300 ${
+                    address === PROTECTED_ADDRESS
+                      ? "bg-gray-500 cursor-not-allowed"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
                 >
                   Remove
                 </button>
