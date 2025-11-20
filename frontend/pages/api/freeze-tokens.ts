@@ -8,26 +8,16 @@ import {
 } from '@solana/web3.js';
 import * as splToken from '@solana/spl-token';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { tokenAccounts, mintAddress, priorityRate, stopRequest } = req.body;
-
-  if (stopRequest) {
-    console.log("Freeze operation received a stop request.");
-    return res.status(200).json({ success: true, message: "Freeze operation stopped by request." });
-  }
-
-  if (!tokenAccounts || !Array.isArray(tokenAccounts) || !mintAddress) {
-    return res.status(400).json({ error: 'Missing required parameters: tokenAccounts and mintAddress' });
-  }
-
-  // --- Securely load the private key from environment variables ---
+// Helper to validate environment variables
+function validateEnvVariables() {
   const privateKeyString = process.env.PRIVATE_KEY;
   if (!privateKeyString) {
-    return res.status(500).json({ error: 'Server private key not configured. Set PRIVATE_KEY environment variable.' });
+    throw new Error('Server private key not configured. Set PRIVATE_KEY environment variable.');
+  }
+
+  const network = process.env.NEXT_NETWORK;
+  if (!network) {
+    throw new Error('Solana network not configured. Set NEXT_NETWORK environment variable.');
   }
 
   let secret: Uint8Array;
@@ -35,13 +25,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     secret = Uint8Array.from(privateKeyString.split(',').map(s => parseInt(s.trim(), 10)));
   } catch (parseError) {
     console.error('Error parsing private key:', parseError);
-    return res.status(500).json({ error: 'Invalid PRIVATE_KEY format in environment variables.' });
+    throw new Error('Invalid PRIVATE_KEY format in environment variables.');
+  }
+  return { secret, network };
+}
+
+// Helper to validate request body
+function validateRequestBody(body: NextApiRequest['body']) {
+  const { tokenAccounts, mintAddress } = body;
+  if (!tokenAccounts || !Array.isArray(tokenAccounts) || !mintAddress) {
+    throw new Error('Missing required parameters: tokenAccounts and mintAddress');
+  }
+  return { tokenAccounts, mintAddress };
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const keypair = Keypair.fromSecretKey(secret);
-  const connection = new Connection(process.env.NEXT_NETWORK!, 'confirmed'); // Assuming NEXT_NETWORK is set in .env
+  const { stopRequest, priorityRate } = req.body;
+
+  if (stopRequest) {
+    console.log("Freeze operation received a stop request.");
+    return res.status(200).json({ success: true, message: "Freeze operation stopped by request." });
+  }
 
   try {
+    const { secret, network } = validateEnvVariables();
+    const { tokenAccounts, mintAddress } = validateRequestBody(req.body);
+
+    const keypair = Keypair.fromSecretKey(secret);
+    const connection = new Connection(network!, 'confirmed');
+
     const mintAddressPublicKey = new PublicKey(mintAddress);
     const CHUNK_SIZE = 25; // This should ideally be configurable or match frontend
 
@@ -84,8 +100,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     res.status(200).json({ success: true, signatures: transactionSignatures });
-  } catch (error: any) {
-    console.error('Error freezing tokens:', error);
+  } catch (error: any) { // Explicitly define error as any
+    console.error('Error in freeze-tokens API:', error);
     res.status(500).json({ error: error.message || 'Failed to freeze tokens' });
   }
 }
